@@ -4,6 +4,7 @@ locals {
   tags = {
     Environment = "Demo"
     Owner       = lookup(data.external.me.result, "name")
+    SecurityControl = "Ignore"
   }
 }
 
