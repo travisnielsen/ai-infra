@@ -83,6 +83,12 @@ resource "azurerm_subnet" "container_apps" {
   resource_group_name  = azurerm_resource_group.shared_rg.name
   virtual_network_name = azurerm_virtual_network.workload_vnet.name
   address_prefixes     = [cidrsubnet(var.cidr, 7, 4)]
+  delegation {
+    name = "container-app-delegation"
+    service_delegation {
+      name    = "Microsoft.App/environments"
+    }
+  }
 }
 resource "azurerm_subnet_network_security_group_association" "nsg_container_apps" {
   subnet_id                 = azurerm_subnet.container_apps.id
@@ -143,7 +149,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "functions_dns_zone_lin
 
 // Private DNS zone for Container Apps
 resource "azurerm_private_dns_zone" "container_app" {
-  name                = "privatelink.${var.region}.containerapps.azure.io"
+  name                = "privatelink.${var.region}.azurecontainerapps.io"
   resource_group_name = azurerm_resource_group.shared_rg.name
 }
 resource "azurerm_private_dns_zone_virtual_network_link" "container_app_dns_zone_link" {
@@ -646,7 +652,7 @@ resource "azurerm_role_assignment" "acr_pull_role_assignment_containerapp" {
 // run an az cli command to provision a repository in the container registry
 resource "null_resource" "acr_repository_setup" {
   provisioner "local-exec" {
-    command = "az acr import --name ${azurerm_container_registry.invoiceapi.name} --source mcr.microsoft.com/mcr/hello-world:latest --image hello-world:latest"
+    command = "az acr import --name ${azurerm_container_registry.invoiceapi.name} --source docker.io/trniel/hello-world-api:latest --image hello-world-api:latest"
   }
   depends_on = [ azurerm_container_registry.invoiceapi ]
 }
@@ -669,8 +675,15 @@ resource "azurerm_container_app_environment" "finance_apps" {
 
   infrastructure_subnet_id = azurerm_subnet.container_apps.id
   public_network_access = "Disabled"
-}
 
+  workload_profile {
+    name                  = "internal-small"
+    workload_profile_type = "D4"
+    maximum_count         = 10
+    minimum_count         = 1
+  }
+
+}
 // private endpoint for container apps environment
 resource "azurerm_private_endpoint" "container_apps_environment" {
   name                = "${local.prefix}-containerapp-env-pe"
@@ -678,6 +691,7 @@ resource "azurerm_private_endpoint" "container_apps_environment" {
   resource_group_name = azurerm_resource_group.shared_rg.name
   subnet_id           = azurerm_subnet.services.id
   depends_on = [ azurerm_private_dns_zone_virtual_network_link.container_app_dns_zone_link ]
+  
   private_service_connection {
     name                           = "${local.prefix}-containerapp-env-psc"
     private_connection_resource_id = azurerm_container_app_environment.finance_apps.id
@@ -706,37 +720,32 @@ resource "azurerm_container_app" "hello_world" {
   
   template {
     container {
-      name   = "examplecontainerapp"
-      image  = "${azurerm_container_registry.invoiceapi.login_server}/hello-world:latest"
+      name   = "hello-world-api"
+      image  = "${azurerm_container_registry.invoiceapi.login_server}/hello-world-api:latest"
       cpu    = 0.25
       memory = "0.5Gi"
     }
-    /*
-    custom_scale_rule {
-      name                = "http-scale-rule"
-      custom_rule_type    = "http"
-      metadata = {
-        concurrentRequests = "50"
-      }
-    }
-    */
+    min_replicas = 1
+    max_replicas = 3
   }
-  
-  /*
+
   ingress {
     allow_insecure_connections = false
-    target_port = 443
+    external_enabled          = true
+    target_port = 8000
     traffic_weight {
-      label = "production"
-      percentage = 100
+      revision_suffix = "prod"
+      label        = "production"
+      percentage   = 100
     }
   }
-  */
-
+  
   registry {
     identity = azurerm_user_assigned_identity.containerapp_acr_identity.id
     server   = azurerm_container_registry.invoiceapi.login_server
   }
+
+  workload_profile_name = "internal-small"
 
 }
 
@@ -809,6 +818,10 @@ resource "azurerm_private_endpoint" "function_app" {
 // Utility VM
 // -----------------------------------------------------------------------------
 
+data "template_file" "user_data" {
+  template = file("${path.module}/util_vm_setup.ps1")
+}
+
 resource "azurerm_network_interface" "utility_vm_nic" {
   name                = "${local.prefix}-utilityvm-nic"
   location            = azurerm_resource_group.shared_rg.location
@@ -846,6 +859,8 @@ resource "azurerm_windows_virtual_machine" "utility_vm" {
     sku       = "win11-25h2-pro"
     version   = "latest"
   }
+
+  user_data = base64encode(data.template_file.user_data.rendered)
 
   tags = local.tags
 }

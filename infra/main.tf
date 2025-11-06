@@ -9,7 +9,7 @@ locals {
 }
 
 resource "azurerm_resource_group" "shared_rg" {
-  name     = "${local.prefix}-rg"
+  name     = "${local.prefix}"
   location = var.region
   tags     = local.tags
 }
