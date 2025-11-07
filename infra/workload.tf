@@ -95,6 +95,23 @@ resource "azurerm_subnet_network_security_group_association" "nsg_container_apps
   network_security_group_id = azurerm_network_security_group.compute_nsg.id
 }
 
+// subnet for AI foundry vnet injection: 10.0.6.0/24 
+resource "azurerm_subnet" "aifoundry" {
+  name                 = "aifoundry"
+  resource_group_name  = azurerm_resource_group.shared_rg.name
+  virtual_network_name = azurerm_virtual_network.workload_vnet.name
+  address_prefixes     = [cidrsubnet(var.cidr, 8, 6)]
+  delegation {
+    name = "service-delegation-aifoundry"
+    service_delegation {
+      name = "Microsoft.App/environments"
+    }
+  }
+}
+resource "azurerm_subnet_network_security_group_association" "nsg_aifoundry" {
+  subnet_id                 = azurerm_subnet.aifoundry.id
+  network_security_group_id = azurerm_network_security_group.compute_nsg.id
+}
 
 
 // DNS Zones for Private Endpoints
@@ -180,6 +197,30 @@ resource "azurerm_private_dns_zone_virtual_network_link" "cognitive_services_dns
   name                  = "${local.prefix}-cognitiveservices-dns-link"
   resource_group_name   = azurerm_resource_group.shared_rg.name
   private_dns_zone_name = azurerm_private_dns_zone.cognitive_services.name
+  virtual_network_id    = azurerm_virtual_network.workload_vnet.id
+}
+
+// Private DNS zone for Azure Open AI
+resource "azurerm_private_dns_zone" "azure_openai" {
+  name                = "privatelink.openai.azure.com"
+  resource_group_name = azurerm_resource_group.shared_rg.name
+}
+resource "azurerm_private_dns_zone_virtual_network_link" "azure_openai_dns_zone_link" {
+  name                  = "${local.prefix}-azure-openai-dns-link"
+  resource_group_name   = azurerm_resource_group.shared_rg.name
+  private_dns_zone_name = azurerm_private_dns_zone.azure_openai.name
+  virtual_network_id    = azurerm_virtual_network.workload_vnet.id
+}
+
+// Private DNS zone for services.ai.azure.com (AI Foundry)
+resource "azurerm_private_dns_zone" "services_ai_azure" {
+  name                = "privatelink.services.ai.azure.com"
+  resource_group_name = azurerm_resource_group.shared_rg.name
+}
+resource "azurerm_private_dns_zone_virtual_network_link" "services_ai_azure_dns_zone_link" {
+  name                  = "${local.prefix}-services-ai-azure-dns-link"
+  resource_group_name   = azurerm_resource_group.shared_rg.name
+  private_dns_zone_name = azurerm_private_dns_zone.services_ai_azure.name
   virtual_network_id    = azurerm_virtual_network.workload_vnet.id
 }
 
@@ -473,7 +514,7 @@ resource "azurerm_cognitive_account" "invoiceapi_docintel" {
     type = "SystemAssigned"
   }
   public_network_access_enabled = false
-  custom_subdomain_name = "${local.identifier}"
+  custom_subdomain_name = "${local.identifier}docintel"
 }
 
 // document intelligence private endpoint
@@ -518,16 +559,48 @@ resource "azapi_resource" "ai_foundry" {
     properties = {
       # Support both Entra ID and API Key authentication for Cognitive Services account
       disableLocalAuth = false
-
-      # Specifies that this is an AI Foundry resourceyes
+      # Specifies that this is an AI Foundry resource
       allowProjectManagement = true
-
       # Set custom subdomain name for DNS names created for this Foundry resource
       customSubDomainName = "${local.identifier}"
+      publicNetworkAccess = "Disabled"
+      # see: https://github.com/microsoft/CAIRA/blob/4b942277f04ff0635496879c5eb05a0e8d547a2d/modules/ai_foundry/main.tf#L36
+      networkAcls = {
+        defaultAction = "Allow"
+      }
+      networkInjections = [
+        {
+          scenario = "agent"
+          subnetArmId = azurerm_subnet.aifoundry.id
+          useMicrosoftManagedNetwork = false
+        }
+      ]
     }
   }
 }
 
+// private endpoints for AI Foundry
+resource "azurerm_private_endpoint" "aifoundry_account" {
+  name                = "${local.prefix}-aifoundry-pe"
+  location            = azurerm_resource_group.shared_rg.location
+  resource_group_name = azurerm_resource_group.shared_rg.name
+  subnet_id           = azurerm_subnet.services.id
+  depends_on = [ azurerm_private_dns_zone_virtual_network_link.services_ai_azure_dns_zone_link ]
+  private_service_connection {
+    name                           = "${local.prefix}-aifoundry-psc"
+    private_connection_resource_id = azapi_resource.ai_foundry.id
+    subresource_names              = ["account"]
+    is_manual_connection           = false
+  }
+  private_dns_zone_group {
+    name = "aifoundry-dns-zone-groups"
+    private_dns_zone_ids = [
+      azurerm_private_dns_zone.services_ai_azure.id,
+      azurerm_private_dns_zone.azure_openai.id,
+      azurerm_private_dns_zone.cognitive_services.id
+    ]
+  }
+}
 
 resource "azapi_resource" "aifoundry_deployment_gpt41mini" {
   type      = "Microsoft.CognitiveServices/accounts/deployments@2023-05-01"
@@ -593,6 +666,32 @@ resource "azapi_resource" "ai_foundry_project" {
     properties = {
       displayName = "project"
       description = "Invoice AI Project"
+    }
+  }
+}
+
+// Connect to Application Insights
+resource "azapi_resource" "appinsights_connection" {
+  type      = "Microsoft.CognitiveServices/accounts/connections@2025-06-01"
+  name      = azurerm_application_insights.invoiceapi.name
+  parent_id = azapi_resource.ai_foundry.id
+  schema_validation_enabled = false
+  depends_on = [ azapi_resource.ai_foundry ]
+
+  body = {
+    name = azurerm_application_insights.invoiceapi.name
+    properties = {
+      category      = "AppInsights"
+      target        = azurerm_application_insights.invoiceapi.id
+      authType      = "ApiKey"
+      isSharedToAll = true
+      credentials = {
+        key = azurerm_application_insights.invoiceapi.instrumentation_key
+      }
+      metadata = {
+        ApiType    = "Azure"
+        ResourceId = azurerm_application_insights.invoiceapi.id
+      }
     }
   }
 }
@@ -860,7 +959,8 @@ resource "azurerm_windows_virtual_machine" "utility_vm" {
     version   = "latest"
   }
 
-  user_data = base64encode(data.template_file.user_data.rendered)
+  
+  custom_data = base64encode(data.template_file.user_data.rendered)
 
   tags = local.tags
 }

@@ -1,6 +1,6 @@
 locals {
   identifier = random_string.naming.result
-  prefix = "invoice-ai-${random_string.naming.result}"
+  prefix = "${random_string.naming.result}"
   tags = {
     Environment = "Demo"
     Owner       = lookup(data.external.me.result, "name")
