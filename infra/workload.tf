@@ -249,6 +249,13 @@ resource "azurerm_user_assigned_identity" "containerapp_acr_identity" {
   location            = azurerm_resource_group.shared_rg.location
 }
 
+// github runner user assigned identity for Azure operations
+resource "azurerm_user_assigned_identity" "github_runner_identity" {
+  name                = "${local.prefix}-github-runner-identity"
+  resource_group_name = azurerm_resource_group.shared_rg.name
+  location            = azurerm_resource_group.shared_rg.location
+}
+
 
 // -----------------------------------------------------------------------------
 // Observability Resources
@@ -959,8 +966,122 @@ resource "azurerm_windows_virtual_machine" "utility_vm" {
     version   = "latest"
   }
 
-  
   custom_data = base64encode(data.template_file.user_data.rendered)
-
   tags = local.tags
 }
+
+// -----------------------------------------------------------------------------
+// Private GitHub runner
+// -----------------------------------------------------------------------------
+resource "azurerm_network_interface" "github_runner_nic" {
+  name                = "${local.prefix}-gh-runner-nic"
+  location            = azurerm_resource_group.shared_rg.location
+  resource_group_name = azurerm_resource_group.shared_rg.name
+
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.utility_vms.id
+    private_ip_address_allocation = "Dynamic"
+  }
+}
+resource "azurerm_linux_virtual_machine" "github_runner_vm" {
+  name                = "${local.prefix}-gh-runner"
+  computer_name       = "ghrunner"
+  resource_group_name = azurerm_resource_group.shared_rg.name
+  location            = azurerm_resource_group.shared_rg.location
+  size                = "Standard_D4s_v3"
+  admin_username      = "azureuser"
+  admin_ssh_key {
+    username   = "azureuser"
+    public_key = file(var.github_runner_ssh_public_key_path)
+  }
+
+  network_interface_ids = [
+    azurerm_network_interface.github_runner_nic.id,
+  ]
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Premium_LRS"
+  }
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "ubuntu-24_04-lts"
+    sku       = "server"
+    version   = "24.04.202510010"  # Latest as of Oct 2025
+  }
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.github_runner_identity.id]
+  }
+
+  custom_data = base64encode(<<-EOF
+    #!/bin/bash
+    
+    # Update system and install dependencies
+    apt-get update
+    apt-get install -y curl wget gpg lsb-release software-properties-common apt-transport-https ca-certificates gnupg
+    
+    # Install Azure CLI
+    curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+    
+    # Install Docker (for container-based actions)
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    apt-get update
+    apt-get install -y docker-ce docker-ce-cli containerd.io
+    
+    # Install additional tools commonly needed for Azure deployments
+    apt-get install -y jq unzip git
+    
+    # Install Terraform
+    wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
+    echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list
+    apt-get update && apt-get install -y terraform
+    
+    # Install PowerShell (for Azure PowerShell modules)
+    wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+    dpkg -i packages-microsoft-prod.deb
+    apt-get update
+    apt-get install -y powershell
+    
+    # Create runner user and setup GitHub Actions runner
+    useradd -m -s /bin/bash actions-runner
+    usermod -aG docker actions-runner
+    
+    # Download and setup GitHub Actions runner
+    cd /home/actions-runner
+    curl -o actions-runner-linux-x64-2.329.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.329.0/actions-runner-linux-x64-2.329.0.tar.gz
+    tar xzf ./actions-runner-linux-x64-2.329.0.tar.gz
+    chown -R actions-runner:actions-runner /home/actions-runner
+    
+    # Configure and start the runner as the actions-runner user
+    sudo -u actions-runner ./config.sh --url https://github.com/${var.github_repository} --token ${var.github_token} --unattended
+    ./svc.sh install actions-runner
+    ./svc.sh start
+    
+    EOF
+  )
+}
+
+// GitHub Runner role assignments for Azure operations
+resource "azurerm_role_assignment" "github_runner_contributor" {
+  scope                = azurerm_resource_group.shared_rg.id
+  role_definition_name = "Contributor"
+  principal_id         = azurerm_user_assigned_identity.github_runner_identity.principal_id
+}
+
+resource "azurerm_role_assignment" "github_runner_acr_push" {
+  scope                = azurerm_container_registry.invoiceapi.id
+  role_definition_name = "AcrPush"
+  principal_id         = azurerm_user_assigned_identity.github_runner_identity.principal_id
+}
+
+resource "azurerm_role_assignment" "github_runner_acr_pull" {
+  scope                = azurerm_container_registry.invoiceapi.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.github_runner_identity.principal_id
+}
+

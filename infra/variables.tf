@@ -26,3 +26,20 @@ variable "utility_vm_admin_password" {
   description = "Admin password for utility VM."
   sensitive   = true
 }
+
+variable "github_token" {
+  description = "GitHub token for runner registration"
+  type        = string
+  sensitive   = true
+}
+
+variable "github_runner_ssh_public_key_path" {
+  description = "Path to the SSH public key file for GitHub runner VM"
+  type        = string
+  default     = "~/.ssh/id_rsa.pub"
+}
+
+variable "github_repository" {
+  description = "GitHub repository to register the self-hosted runner with (e.g., user/repo)"
+  type        = string
+}

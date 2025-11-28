@@ -1,0 +1,100 @@
+name: Azure Deployment with Self-Hosted Runner
+on:
+  push:
+    branches: [ main ]
+    paths: 
+      - 'hello-world/**'
+      - 'infra/**'
+  pull_request:
+    branches: [ main ]
+    paths: 
+      - 'hello-world/**'
+      - 'infra/**'
+  workflow_dispatch:
+
+env:
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  CONTAINER_REGISTRY: ${{ secrets.CONTAINER_REGISTRY }}
+  RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
+
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Log in to Azure using Managed Identity
+      run: |
+        az login --identity --username $AZURE_CLIENT_ID
+        az account set --subscription $AZURE_SUBSCRIPTION_ID
+        echo "Logged in to Azure successfully"
+
+    - name: Verify Azure CLI access
+      run: |
+        echo "Current subscription:"
+        az account show --output table
+        echo "Available resource groups:"
+        az group list --output table
+
+    - name: Build and push Docker image
+      if: contains(github.event.head_commit.modified, 'hello-world/') || github.event_name == 'workflow_dispatch'
+      run: |
+        cd hello-world
+        
+        # Build multi-platform image
+        docker buildx create --use --name multiarch || true
+        docker buildx build \
+          --platform linux/amd64,linux/arm64 \
+          -t $CONTAINER_REGISTRY/hello-world-api:${{ github.sha }} \
+          -t $CONTAINER_REGISTRY/hello-world-api:latest \
+          --push .
+        
+        echo "Image pushed successfully"
+
+    - name: Deploy infrastructure with Terraform
+      if: contains(github.event.head_commit.modified, 'infra/') || github.event_name == 'workflow_dispatch'
+      run: |
+        cd infra
+        
+        # Initialize Terraform
+        terraform init
+        
+        # Plan the deployment
+        terraform plan \
+          -var="subscription_id=$AZURE_SUBSCRIPTION_ID" \
+          -var="github_repository=${{ github.repository }}" \
+          -var="github_token=${{ secrets.GH_TOKEN }}"
+        
+        # Apply if this is a push to main
+        if [ "${{ github.event_name }}" == "push" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
+          terraform apply -auto-approve \
+            -var="subscription_id=$AZURE_SUBSCRIPTION_ID" \
+            -var="github_repository=${{ github.repository }}" \
+            -var="github_token=${{ secrets.GH_TOKEN }}"
+        fi
+
+    - name: Update Container App with new image
+      if: contains(github.event.head_commit.modified, 'hello-world/') || github.event_name == 'workflow_dispatch'
+      run: |
+        # Update container app with new image
+        az containerapp update \
+          --name hello-world \
+          --resource-group $RESOURCE_GROUP \
+          --image $CONTAINER_REGISTRY/hello-world-api:${{ github.sha }}
+        
+        echo "Container app updated successfully"
+
+    - name: Run Azure CLI commands (example)
+      run: |
+        echo "=== Container Apps ==="
+        az containerapp list --resource-group $RESOURCE_GROUP --output table
+        
+        echo "=== Container Registry repositories ==="
+        az acr repository list --name $(echo $CONTAINER_REGISTRY | cut -d'.' -f1) --output table
+        
+        echo "=== Function Apps ==="
+        az functionapp list --resource-group $RESOURCE_GROUP --output table
