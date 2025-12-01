@@ -57,12 +57,12 @@ output "azure_subscription_id" {
 # Container Registry Outputs
 output "container_registry_login_server" {
   description = "Login server for the container registry"
-  value       = azurerm_container_registry.invoiceapi.login_server
+  value       = module.container_registry.login_server
 }
 
 output "container_registry_name" {
   description = "Name of the container registry"
-  value       = azurerm_container_registry.invoiceapi.name
+  value       = module.container_registry.name
 }
 
 # Observability Outputs
@@ -103,16 +103,4 @@ output "container_app_urls" {
 output "function_app_urls" {
   description = "URLs of function apps"
   value       = module.function_apps.function_app_urls
-}
-
-# AI Services Outputs
-output "ai_service_endpoints" {
-  description = "AI service endpoints"
-  value       = module.ai_services.service_endpoints
-  sensitive   = true
-}
-
-output "openai_deployments" {
-  description = "OpenAI model deployments"
-  value       = module.ai_services.openai_deployments
 }

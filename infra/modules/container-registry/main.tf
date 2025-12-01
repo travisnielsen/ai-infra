@@ -15,13 +15,18 @@ resource "azurerm_container_registry" "registry" {
   tags                     = var.tags
 }
 
+# Local values for conditional private endpoint creation
+locals {
+  create_private_endpoint = var.enable_private_endpoints
+}
+
 # Private Endpoint
 resource "azurerm_private_endpoint" "acr_pe" {
-  count               = var.private_endpoint_subnet_id != "" ? 1 : 0
+  count               = local.create_private_endpoint ? 1 : 0
   name                = "${azurerm_container_registry.registry.name}-pe"
   resource_group_name = var.resource_group_name
   location            = var.location
-  subnet_id           = var.private_endpoint_subnet_id
+  subnet_id           = var.private_endpoint_info.subnet_id
   tags                = var.tags
 
   private_service_connection {
@@ -32,10 +37,10 @@ resource "azurerm_private_endpoint" "acr_pe" {
   }
 
   dynamic "private_dns_zone_group" {
-    for_each = var.private_dns_zone_id != "" ? [1] : []
+    for_each = var.private_endpoint_info != null && var.private_endpoint_info.dns_zone_id != "" ? [1] : []
     content {
       name                 = "acr-dns-zone-group"
-      private_dns_zone_ids = [var.private_dns_zone_id]
+      private_dns_zone_ids = [var.private_endpoint_info.dns_zone_id]
     }
   }
 }

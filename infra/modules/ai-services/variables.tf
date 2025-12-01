@@ -38,6 +38,12 @@ variable "computer_vision_enabled" {
   default     = false
 }
 
+variable "enable_private_endpoints" {
+  description = "Enable private endpoints for AI services"
+  type        = bool
+  default     = false
+}
+
 variable "private_endpoint_info" {
   description = "Private endpoint configuration (subnet_id and dns_zone_id)"
   type = object({

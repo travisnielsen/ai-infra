@@ -1,3 +1,9 @@
+# Local value to determine which private endpoints to create
+locals {
+  # Static map of private endpoints - only includes keys that are configured in workload.tf
+  private_endpoints = var.enable_private_endpoints ? var.private_dns_zone_ids : {}
+}
+
 # Storage Account
 resource "azurerm_storage_account" "main" {
   name                = "${var.project_name}${var.environment}sa"
@@ -69,11 +75,10 @@ resource "azurerm_storage_account_network_rules" "main" {
   bypass                     = ["Metrics", "Logging", "AzureServices"]
 }
 
+
 # Private Endpoints for Storage Account
 resource "azurerm_private_endpoint" "storage_resources" {
-  for_each = var.private_endpoint_subnet_id != "" ? {
-    for k, v in var.private_dns_zone_ids : k => v if v != ""
-  } : {}
+  for_each = local.private_endpoints
 
   name                = "${azurerm_storage_account.main.name}-${each.key}-pe"
   location            = var.location
@@ -93,5 +98,4 @@ resource "azurerm_private_endpoint" "storage_resources" {
   }
 
   tags = var.tags
-
 }

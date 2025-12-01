@@ -19,7 +19,7 @@ output "foundry_deployments" {
   }
 }
 
-output "foundry_managed_identity" {
-  description = "Managed identity of the Foundry service"
-  value = azapi_resource.foundry.identity.principal_id
+output "managed_identity_principal_id" {
+  description = "Managed identity principal ID of the Foundry service"
+  value = try(jsondecode(azapi_resource.foundry.output).identity.principalId, null)
 }

@@ -79,7 +79,6 @@ variable "function_apps" {
     name                    = string
     runtime_stack          = string # "python", "node", "dotnet", "java"
     runtime_version        = string
-    service_plan_sku       = string # "Y1", "EP1", "P1v2", etc.
     always_on              = bool
     app_settings           = map(string)
     connection_strings     = map(string)
@@ -92,6 +91,12 @@ variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)
   default     = {}
+}
+
+variable "enable_private_endpoints" {
+  description = "Enable private endpoints for Function Apps"
+  type        = bool
+  default     = false
 }
 
 variable "private_endpoint_subnet_id" {

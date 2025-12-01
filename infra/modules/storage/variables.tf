@@ -99,6 +99,12 @@ variable "is_hns_enabled" {
   default     = false
 }
 
+variable "enable_private_endpoints" {
+  description = "Enable private endpoints for Storage Account"
+  type        = bool
+  default     = false
+}
+
 variable "private_endpoint_subnet_id" {
   description = "Subnet ID for private endpoint (private endpoints created if specified)"
   type        = string

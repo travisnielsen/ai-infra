@@ -42,14 +42,18 @@ variable "anonymous_pull_enabled" {
   default     = false
 }
 
-variable "private_endpoint_subnet_id" {
-  description = "Subnet ID for private endpoint (private endpoint created if specified)"
-  type        = string
-  default     = ""
+variable "enable_private_endpoints" {
+  description = "Enable private endpoints for Container Registry"
+  type        = bool
+  default     = false
 }
 
-variable "private_dns_zone_id" {
-  description = "Private DNS zone ID for function apps (privatelink.azurewebsites.net)"
-  type        = string
-  default     = ""
+variable "private_endpoint_info" {
+  description = "Private endpoint configuration (subnet_id and dns_zone_id)"
+  type = object({
+    subnet_id   = string
+    dns_zone_id = string
+  })
+  default = null
+  nullable = true
 }

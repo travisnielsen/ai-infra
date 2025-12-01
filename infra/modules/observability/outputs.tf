@@ -9,7 +9,7 @@ output "log_analytics_workspace_name" {
 }
 
 output "application_insights_id" {
-  description = "ID of the Application Insights instance"
+  description = "Resource ID of the Application Insights instance"
   value       = azurerm_application_insights.invoiceapi.id
 }
 

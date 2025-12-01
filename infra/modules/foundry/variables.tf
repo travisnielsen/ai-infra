@@ -94,20 +94,20 @@ variable "public_network_access" {
   default     = "Disabled"
 }
 
-variable "private_endpoint_subnet_id" {
-  description = "Subnet ID for private endpoint (private endpoint created if specified)"
-  type        = string
-  default     = ""
+variable "enable_private_endpoints" {
+  description = "Enable private endpoints for Foundry"
+  type        = bool
+  default     = false
 }
 
-variable "private_dns_zone_ids" {
-  description = "Private DNS zone IDs for Cognitive Services (cognitiveServices, azureOpenAI, servicesAiAzure)"
-  type        = map(string)
-  default     = {
-    cognitiveServices = ""
-    azureOpenAI       = ""
-    servicesAiAzure   = ""
-  }
+variable "private_endpoint_info" {
+  description = "Private endpoint configuration (subnet_id and dns_zone_ids)"
+  type = object({
+    subnet_id = string
+    dns_zone_ids = map(string)
+  })
+  default = null
+  nullable = true
 }
 
 variable "network_restrictions" {
@@ -124,6 +124,12 @@ variable "network_restrictions" {
     ip_rules             = []
     virtual_network_rules = []
   }
+}
+
+variable "enable_app_insights_connection" {
+  description = "Enable Application Insights connection for Foundry"
+  type        = bool
+  default     = false
 }
 
 variable "app_insights_instrumentation_key" {

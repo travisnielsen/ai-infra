@@ -23,9 +23,8 @@ module "networking" {
   
   # Define Subnets with their configurations
   subnets = {
-    firewall = {
+    AzureFirewallSubnet = {
       address_prefix = cidrsubnet(var.cidr, 10, 0) # 10.0.0.0/26 for firewall (10.0.0.0 - 10.0.0.63)
-      nsg_name       = "AzureFirewallSubnet"
     }  
     dmz = {
       address_prefix = cidrsubnet(var.cidr, 10, 1) # 10.0.0.64/26 for dmz (10.0.0.64 - 10.0.0.127)
@@ -115,8 +114,11 @@ module "container_registry" {
     project_name                  = local.prefix
     public_network_access_enabled = false
     anonymous_pull_enabled        = false
-    private_endpoint_subnet_id    = module.networking.subnet_ids["services"]
-    private_dns_zone_id           = module.networking.private_dns_zone_ids["container_registry"]
+    enable_private_endpoints = true
+    private_endpoint_info = {
+      subnet_id   = module.networking.subnet_ids["services"]
+      dns_zone_id = module.networking.private_dns_zone_ids["container_registry"]
+    }
     tags                          = local.tags
 }
 
@@ -173,6 +175,7 @@ module "storage" {
   ]
   
   # Private endpoint configuration
+  enable_private_endpoints = true
   private_endpoint_subnet_id  = module.networking.subnet_ids["services"]
   private_dns_zone_ids = {
     blob = module.networking.private_dns_zone_ids["storage_blob"]
@@ -194,13 +197,16 @@ module "container_apps" {
   # Dependencies
   subnet_id                    = module.networking.subnet_ids.containerapps
   log_analytics_workspace_id   = module.observability.log_analytics_workspace_id
-  container_registry_id        = module.container_registry.container_registry_id
-  container_registry_server    = module.container_registry.container_registry_login_server
-  managed_identity_id          = module.security.managed_identity_ids["container-apps-identity"]
+  container_registry_id        = module.container_registry.id
+  container_registry_server    = module.container_registry.login_server
+  managed_identity_id          = module.security.managed_identity_ids["containerapp-identity"]
   
   # Private endpoint configuration
-  private_endpoint_subnet_id  = module.networking.subnet_ids.services
-  private_dns_zone_id         = module.networking.private_dns_zone_ids.container_apps
+  enable_private_endpoints = true
+  private_endpoint_info = {
+    subnet_id   = module.networking.subnet_ids["services"]
+    dns_zone_id = module.networking.private_dns_zone_ids["container_apps"]
+  }
 
   # Workload profile configuration
   workload_profiles = [
@@ -215,7 +221,7 @@ module "container_apps" {
   container_apps = [
     {
       name                   = "hello-world-api"
-      container_image        = "${module.container_registry.container_registry_login_server}/hello-world-api:latest"
+      image                  = "${module.container_registry.login_server}/hello-world-api:latest"
       cpu                    = 0.5
       memory                 = "1.0Gi"
       replicas               = 2
@@ -224,7 +230,9 @@ module "container_apps" {
       external_ingress       = true
       workload_profile_name  = ""
       target_port            = 8000
-      workload_profile_name = "internal-small"
+      workload_profile_name  = "internal-small"
+      env_vars               = [ ]
+      secrets                = [ ]
 
     }
   ]
@@ -249,10 +257,11 @@ module "function_apps" {
   application_insights_key                  = module.observability.application_insights_instrumentation_key
   application_insights_connection_string    = module.observability.application_insights_connection_string
   key_vault_id                              = module.security.key_vault_id
-  managed_identity_id                       = module.security.managed_identity_ids["function-apps-identity"]
+  managed_identity_id                       = module.security.managed_identity_ids["funcapp-identity"]
   subnet_id                                 = module.networking.subnet_ids.services
   
   # Private endpoint configuration
+  enable_private_endpoints = true
   private_endpoint_subnet_id  = module.networking.subnet_ids["services"]
   private_dns_zone_id         = module.networking.private_dns_zone_ids["functions"]
   
@@ -285,6 +294,7 @@ module "ai_services" {
   form_recognizer_enabled    = true
   computer_vision_enabled    = false
 
+  enable_private_endpoints = true
   private_endpoint_info = {
     subnet_id   = module.networking.subnet_ids["services"]
     dns_zone_id = module.networking.private_dns_zone_ids["cognitive_services"]
@@ -307,12 +317,15 @@ module "foundry" {
 
   # networking
   vnet_integration_subnet_id  = module.networking.subnet_ids["foundry"]
-  private_endpoint_subnet_id  = module.networking.subnet_ids["services"]
-  private_dns_zone_ids        = [ 
-                                  module.networking.private_dns_zone_ids["ai_services"],
-                                  module.networking.private_dns_zone_ids["cognitive_services"],
-                                  module.networking.private_dns_zone_ids["openai"]
-                                ]
+  enable_private_endpoints = true
+  private_endpoint_info = {
+    subnet_id = module.networking.subnet_ids["services"]
+    dns_zone_ids = {
+      cognitiveServices = module.networking.private_dns_zone_ids["cognitive_services"]
+      azureOpenAI       = module.networking.private_dns_zone_ids["openai"]
+      servicesAiAzure   = module.networking.private_dns_zone_ids["ai_services"]
+    }
+  }
 
   projects = [
     {
@@ -327,7 +340,8 @@ module "foundry" {
     }
   ]
 
-  app_insights_resource_id = module.observability.application_insights_resource_id
+  enable_app_insights_connection = true
+  app_insights_resource_id = module.observability.application_insights_id
   app_insights_instrumentation_key = module.observability.application_insights_instrumentation_key
 }
 

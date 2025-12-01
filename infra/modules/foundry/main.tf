@@ -1,3 +1,8 @@
+# Local values for conditional private endpoint creation
+locals {
+  create_private_endpoint = var.enable_private_endpoints
+}
+
 # Microsoft Foundry (OpenAI Service with Project Management)
 resource "azapi_resource" "foundry" {
   type                      = "Microsoft.CognitiveServices/accounts@2025-06-01"
@@ -6,7 +11,7 @@ resource "azapi_resource" "foundry" {
   location                  = var.location
   schema_validation_enabled = false
 
-  body = jsonencode({
+  body = {
     kind = "AIServices"
     sku = {
       name = var.sku
@@ -31,7 +36,7 @@ resource "azapi_resource" "foundry" {
         }
       ]
     }
-  })
+  }
 
   tags = merge(var.tags, {
     Module  = "ai-services"
@@ -50,7 +55,7 @@ resource "azapi_resource" "foundry_deployments" {
   parent_id  = azapi_resource.foundry.id
   depends_on = [azapi_resource.foundry]
 
-  body = jsonencode({
+  body = {
     sku = {
       name     = each.value.sku_name
       capacity = each.value.capacity
@@ -62,16 +67,16 @@ resource "azapi_resource" "foundry_deployments" {
         version = each.value.model.version
       }
     }
-  })
+  }
 }
 
 # Private Endpoints for Foundry
 resource "azurerm_private_endpoint" "foundry" {
-  count               = var.private_endpoint_subnet_id != "" ? 1 : 0
+  count               = local.create_private_endpoint ? 1 : 0
   name                = "${var.project_identifier}-foundry-${var.environment}-pe"
   location            = var.location
   resource_group_name = var.resource_group_name
-  subnet_id           = var.private_endpoint_subnet_id
+  subnet_id           = var.private_endpoint_info.subnet_id
 
   private_service_connection {
     name                           = "${var.project_identifier}-foundry-${var.environment}-psc"
@@ -81,10 +86,10 @@ resource "azurerm_private_endpoint" "foundry" {
   }
 
   dynamic "private_dns_zone_group" {
-    for_each = var.private_dns_zone_ids["cognitiveServices"] != "" || var.private_dns_zone_ids["azureOpenAI"] != "" || var.private_dns_zone_ids["servicesAiAzure"] != "" ? [1] : []
+    for_each = var.private_endpoint_info != null && length([for k, v in var.private_endpoint_info.dns_zone_ids : v if v != ""]) > 0 ? [1] : []
     content {
       name                 = "foundry-dns-zone-group"
-      private_dns_zone_ids = [for k, v in var.private_dns_zone_ids : v if v != ""]
+      private_dns_zone_ids = [for k, v in var.private_endpoint_info.dns_zone_ids : v if v != ""]
     }
   }
 
@@ -105,7 +110,7 @@ resource "azapi_resource" "foundry_project" {
   location                  = var.location
   schema_validation_enabled = false
 
-  body = jsonencode({
+  body = {
     sku = {
       name = var.sku
     }
@@ -116,19 +121,19 @@ resource "azapi_resource" "foundry_project" {
       displayName = each.value.display_name
       description = each.value.description
     }
-  })
+  }
 }
 
 # Application Insights
 resource "azapi_resource" "foundry_appinsights_connection" {
-  count                     = var.app_insights_resource_id != "" && var.app_insights_instrumentation_key != "" ? 1 : 0
+  count                     = var.enable_app_insights_connection ? 1 : 0
   type                      = "Microsoft.CognitiveServices/accounts/connections@2025-06-01"
-  name                      = "${azapi_resource.foundry.name}-appinsights-connection"
+  name                      = "${var.project_identifier}-foundry-${var.environment}-appinsights-connection"
   parent_id                 = azapi_resource.foundry.id
   schema_validation_enabled = false
   depends_on                = [azapi_resource.foundry]
 
-  body = jsonencode({
+  body = {
     properties = {
       category      = "AppInsights"
       target        = var.app_insights_resource_id
@@ -142,5 +147,5 @@ resource "azapi_resource" "foundry_appinsights_connection" {
         ResourceId = var.app_insights_resource_id
       }
     }
-  })
+  }
 }

@@ -1,3 +1,9 @@
+# Local values for conditional private endpoint creation
+locals {
+  create_form_recognizer_pe = var.enable_private_endpoints && var.form_recognizer_enabled
+  create_computer_vision_pe = var.enable_private_endpoints && var.computer_vision_enabled
+}
+
 # Azure Form Recognizer (Document Intelligence)
 resource "azurerm_cognitive_account" "form_recognizer" {
   count               = var.form_recognizer_enabled ? 1 : 0
@@ -12,13 +18,7 @@ resource "azurerm_cognitive_account" "form_recognizer" {
   # Network restrictions
   network_acls {
     default_action = var.network_restrictions.default_action
-    
-    dynamic "ip_rules" {
-      for_each = var.network_restrictions.ip_rules
-      content {
-        ip_range = ip_rules.value
-      }
-    }
+    ip_rules       = var.network_restrictions.ip_rules
 
     dynamic "virtual_network_rules" {
       for_each = var.network_restrictions.virtual_network_rules
@@ -41,7 +41,7 @@ resource "azurerm_cognitive_account" "form_recognizer" {
 
 # Private Endpoints for Form Recognizer
 resource "azurerm_private_endpoint" "form_recognizer" {
-  count               = var.private_endpoint_info.subnet_id != "" && var.form_recognizer_enabled ? 1 : 0
+  count               = local.create_form_recognizer_pe ? 1 : 0
   name                = "${azurerm_cognitive_account.form_recognizer[0].name}-pe"
   location            = var.location
   resource_group_name = var.resource_group_name
@@ -74,16 +74,12 @@ resource "azurerm_cognitive_account" "computer_vision" {
   kind                = "ComputerVision"
   sku_name            = "S1"
 
+  custom_subdomain_name = "${var.project_name}-vision-${var.environment}"
+
   # Network restrictions
   network_acls {
     default_action = var.network_restrictions.default_action
-    
-    dynamic "ip_rules" {
-      for_each = var.network_restrictions.ip_rules
-      content {
-        ip_range = ip_rules.value
-      }
-    }
+    ip_rules       = var.network_restrictions.ip_rules
 
     dynamic "virtual_network_rules" {
       for_each = var.network_restrictions.virtual_network_rules
@@ -106,7 +102,7 @@ resource "azurerm_cognitive_account" "computer_vision" {
 
 # Private Endpoints for Computer Vision
 resource "azurerm_private_endpoint" "computer_vision" {
-  count               = var.private_endpoint_info.subnet_id != "" && var.computer_vision_enabled ? 1 : 0
+  count               = local.create_computer_vision_pe ? 1 : 0
   name                = "${azurerm_cognitive_account.computer_vision[0].name}-pe"
   location            = var.location
   resource_group_name = var.resource_group_name

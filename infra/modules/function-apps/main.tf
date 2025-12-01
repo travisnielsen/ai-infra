@@ -1,6 +1,6 @@
 # Service Plans for Function Apps
 resource "azurerm_service_plan" "app_service_plan" {
-  name                = "${var.project_name}-${each.value.name}-plan-${var.environment}"
+  name                = "${var.project_name}-app-service-plan-${var.environment}"
   resource_group_name = var.resource_group_name
   location            = var.location
   os_type             = "Linux"
@@ -14,7 +14,7 @@ resource "azurerm_service_plan" "app_service_plan" {
 # Function Apps
 resource "azurerm_linux_function_app" "apps" {
   for_each = {
-    for app in var.function_apps : app.name => app
+    for idx, app in var.function_apps : tostring(idx) => app
   }
 
   name                = "${var.project_name}-${each.value.name}-func-${var.environment}"
@@ -108,7 +108,9 @@ resource "azurerm_app_service_virtual_network_swift_connection" "vnet" {
 
 # Private Endpoints for Function Apps
 resource "azurerm_private_endpoint" "function_app_pe" {
-  for_each = var.private_endpoint_subnet_id != "" ? { for app in var.function_apps : app.name => app } : {}
+  for_each = var.enable_private_endpoints ? {
+    for idx, app in var.function_apps : tostring(idx) => app
+  } : {}
 
   name                = "${azurerm_linux_function_app.apps[each.key].name}-pe"
   location            = var.location
