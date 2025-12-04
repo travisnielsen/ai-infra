@@ -101,9 +101,9 @@ resource "azurerm_container_app" "apps" {
 
   # Registry configuration
   dynamic "registry" {
-    for_each = var.container_registry_server != "" ? [1] : []
+    for_each = var.container_registry_login_server != "" ? [1] : []
     content {
-      server   = var.container_registry_server
+      server   = var.container_registry_login_server
       identity = var.managed_identity_id
     }
   }

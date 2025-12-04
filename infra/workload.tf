@@ -3,6 +3,7 @@
 ##################################################
 # Networking Module
 ##################################################
+
 module "networking" {
   source              = "./modules/networking"
   prefix              = local.prefix
@@ -69,9 +70,11 @@ module "networking" {
 
 }
 
+
 ##################################################
 # Observability Module
 ##################################################
+
 module "observability" {
   source = "./modules/observability"
   prefix              = local.prefix
@@ -80,9 +83,11 @@ module "observability" {
   tags                = local.tags
 }
 
+
 ##################################################
 # Security Module
 ##################################################
+
 module "security" {
   source                 = "./modules/security"
   prefix                 = local.prefix
@@ -102,14 +107,16 @@ module "security" {
   tags                          = local.tags
 }
 
+
 ##################################################
 # Container Registry
 ##################################################
+
 module "container_registry" {
     source                        = "./modules/container-registry"
     resource_group_name           = azurerm_resource_group.shared_rg.name
     location                      = azurerm_resource_group.shared_rg.location
-    sku                           = "Standard"
+    sku                           = "Premium"
     environment                   = "demo"
     project_name                  = local.prefix
     public_network_access_enabled = false
@@ -125,6 +132,7 @@ module "container_registry" {
 ##################################################
 # GitHub Runner Module
 ##################################################
+
 /*
 module "github_runner" {
   source                        = "./modules/github-runner"
@@ -143,10 +151,12 @@ module "github_runner" {
 }
 */
 
+
 ##################################################
-# Storage Module
+# Storage Module (application storage)
 ##################################################
-module "storage" {
+
+module "app_storage" {
   source                = "./modules/storage"
   resource_group_name   = azurerm_resource_group.shared_rg.name
   location              = azurerm_resource_group.shared_rg.location
@@ -175,7 +185,7 @@ module "storage" {
   ]
   
   # Private endpoint configuration
-  enable_private_endpoints = true
+  enable_private_endpoints    = true
   private_endpoint_subnet_id  = module.networking.subnet_ids["services"]
   private_dns_zone_ids = {
     blob = module.networking.private_dns_zone_ids["storage_blob"]
@@ -184,22 +194,54 @@ module "storage" {
   tags = local.tags
 }
 
+
+##################################################
+# Storage Module (function app storage)
+##################################################
+
+module "funcapp_storage" {
+  source                = "./modules/storage"
+  resource_group_name   = azurerm_resource_group.shared_rg.name
+  location              = azurerm_resource_group.shared_rg.location
+  environment           = "demo"
+  project_name          = "${local.prefix}funcapp"
+  
+  # Storage configuration
+  storage_account_tier          = "Standard"
+  storage_account_replication   = "LRS"
+  enable_versioning             = true
+  enable_soft_delete            = true
+  shared_access_key_enabled     = false
+
+  # Private endpoint configuration
+  enable_private_endpoints      = true
+  private_endpoint_subnet_id    = module.networking.subnet_ids["services"]
+  private_dns_zone_ids = {
+    blob = module.networking.private_dns_zone_ids["storage_blob"]
+  }
+  
+  tags = local.tags
+}
+
+
 ##################################################
 # Container Apps Module
 ##################################################
+
 module "container_apps" {
   source                = "./modules/container-apps"
   resource_group_name   = azurerm_resource_group.shared_rg.name
   location              = azurerm_resource_group.shared_rg.location
-  environment           = "demo"
+  environment           = "dev"
   project_name          = local.prefix
+  depends_on            = [ terraform_data.acr_repository_provision_hello_world_api ]
   
   # Dependencies
-  subnet_id                    = module.networking.subnet_ids.containerapps
-  log_analytics_workspace_id   = module.observability.log_analytics_workspace_id
-  container_registry_id        = module.container_registry.id
-  container_registry_server    = module.container_registry.login_server
-  managed_identity_id          = module.security.managed_identity_ids["containerapp-identity"]
+  subnet_id                           = module.networking.subnet_ids["containerapps"]
+  log_analytics_workspace_id          = module.observability.log_analytics_workspace_id
+  container_registry_id               = module.container_registry.id
+  container_registry_login_server     = module.container_registry.login_server
+  managed_identity_id                 = module.security.managed_identity_ids["containerapp-identity"]
   
   # Private endpoint configuration
   enable_private_endpoints = true
@@ -233,7 +275,6 @@ module "container_apps" {
       workload_profile_name  = "internal-small"
       env_vars               = [ ]
       secrets                = [ ]
-
     }
   ]
   dapr_enabled   = false
@@ -241,9 +282,11 @@ module "container_apps" {
   tags = local.tags
 }
 
+
 ##################################################
 # Function Apps Module
 ##################################################
+
 module "function_apps" {
   source                = "./modules/function-apps"
   resource_group_name   = azurerm_resource_group.shared_rg.name
@@ -252,13 +295,12 @@ module "function_apps" {
   project_name          = local.prefix
   
   # Dependencies
-  storage_account_name                      = module.storage.storage_account_name
-  storage_account_access_key                = module.storage.storage_account_primary_key
+  storage_account_name                      = module.funcapp_storage.storage_account_name
   application_insights_key                  = module.observability.application_insights_instrumentation_key
   application_insights_connection_string    = module.observability.application_insights_connection_string
   key_vault_id                              = module.security.key_vault_id
   managed_identity_id                       = module.security.managed_identity_ids["funcapp-identity"]
-  subnet_id                                 = module.networking.subnet_ids.services
+  subnet_id                                 = module.networking.subnet_ids["functionapps"]
   
   # Private endpoint configuration
   enable_private_endpoints = true
@@ -281,9 +323,11 @@ module "function_apps" {
   tags = local.tags
 }
 
+
 ##################################################
 # AI Services Module
 ##################################################
+
 module "ai_services" {
   source                = "./modules/ai-services"
   resource_group_name   = azurerm_resource_group.shared_rg.name
@@ -303,9 +347,11 @@ module "ai_services" {
   tags = local.tags
 }
 
+
 ##################################################
 # Foundry Module
 ##################################################
+
 module "foundry" {
   source                = "./modules/foundry"
   resource_group_name   = azurerm_resource_group.shared_rg.name
@@ -345,6 +391,7 @@ module "foundry" {
   app_insights_instrumentation_key = module.observability.application_insights_instrumentation_key
 }
 
+
 ##################################################
 # Virtual Machine Module (Utility VM)
 ##################################################
@@ -367,4 +414,57 @@ module "utility_vm" {
   custom_data = base64encode(templatefile("${path.module}/scripts/util_vm_setup.ps1", {}))
   
   tags = local.tags
+}
+
+
+##################################################
+# Permissions
+##################################################
+
+// add current authenticated user as blob storage contributor to the app storage account
+resource "azurerm_role_assignment" "storage_blob_contributor" {
+  scope                = module.app_storage.storage_account_id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+// add the Function App managed identiy as blob storage contributor to the Function App storage account
+resource "azurerm_role_assignment" "funcapp_storage_blob_contributor" {
+  scope                = module.funcapp_storage.storage_account_id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = module.security.managed_identity_principal_ids["funcapp-identity"]
+}
+
+// grant the current user ability to push images to the container registry
+resource "azurerm_role_assignment" "acr_push_current_user" {
+  scope                = module.container_registry.id
+  role_definition_name = "AcrPush"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+// grant the Function App managed identity pull access to the container registry
+resource "azurerm_role_assignment" "acr_pull_funcapp_identity" {
+  scope                = module.container_registry.id
+  role_definition_name = "AcrPull"
+  principal_id         = module.security.managed_identity_principal_ids["funcapp-identity"]
+}
+
+// grant the Container App managed identity pull access to the container registry
+resource "azurerm_role_assignment" "acr_pull_containerapp_identity" {
+  scope                = module.container_registry.id
+  role_definition_name = "AcrPull"
+  principal_id         = module.security.managed_identity_principal_ids["containerapp-identity"]
+}
+
+
+##################################################
+# Scripts
+##################################################
+
+// run an az cli command to provision a repository in the container registry
+resource "terraform_data" "acr_repository_provision_hello_world_api" {
+  provisioner "local-exec" {
+    command = "az acr import --name ${module.container_registry.name} --source docker.io/trniel/hello-world-api:latest --image hello-world-api:latest || echo 'Image already exists, skipping import'"
+  }
+  depends_on = [ module.container_registry ]
 }

@@ -22,7 +22,7 @@ resource "azapi_resource" "foundry" {
     properties = {
       disableLocalAuth       = var.disable_local_auth
       allowProjectManagement = true
-      customSubDomainName    = "${var.project_identifier}}"
+      customSubDomainName    = "${var.project_identifier}"
       publicNetworkAccess    = var.public_network_access
       networkAcls = {
         defaultAction = var.network_restrictions.default_action

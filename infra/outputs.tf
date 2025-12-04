@@ -80,12 +80,12 @@ output "log_analytics_workspace_id" {
 # Storage Outputs
 output "storage_account_name" {
   description = "Name of the storage account"
-  value       = module.storage.storage_account_name
+  value       = module.app_storage.storage_account_name
 }
 
 output "storage_container_urls" {
   description = "URLs of storage containers"
-  value       = module.storage.container_urls
+  value       = module.app_storage.container_urls
 }
 
 # Container Apps Outputs

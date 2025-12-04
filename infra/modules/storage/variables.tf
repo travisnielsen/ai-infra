@@ -93,6 +93,12 @@ variable "public_network_access_enabled" {
   default     = true
 }
 
+variable "shared_access_key_enabled" {
+  description = "Enable shared access key for storage account"
+  type        = bool
+  default     = false
+}
+
 variable "is_hns_enabled" {
   description = "Enable hierarchical namespace for Data Lake"
   type        = bool

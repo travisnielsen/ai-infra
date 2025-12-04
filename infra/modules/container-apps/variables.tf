@@ -35,8 +35,8 @@ variable "container_registry_id" {
   type        = string
 }
 
-variable "container_registry_server" {
-  description = "Container Registry server URL"
+variable "container_registry_login_server" {
+  description = "Container Registry login server"
   type        = string
 }
 

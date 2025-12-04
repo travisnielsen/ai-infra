@@ -18,6 +18,7 @@ resource "azurerm_storage_account" "main" {
   min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false
   public_network_access_enabled   = var.public_network_access_enabled
+  shared_access_key_enabled       = var.shared_access_key_enabled
 
   # Enable advanced features
   is_hns_enabled = var.is_hns_enabled
