@@ -8,23 +8,31 @@ data "external" "me" {
   program = ["az", "account", "show", "--query", "user"]
 }
 
-# Local values
+# Random naming
+resource "random_string" "naming" {
+  special = false
+  upper   = false
+  length  = 5
+}
+
+resource "random_string" "alpha_prefix" {
+  special = false
+  upper   = false
+  length  = 1
+  lower   = true
+  numeric = false
+}
+
+# Local values with alphabetic prefix
 locals {
-  identifier = random_string.naming.result
-  prefix     = random_string.naming.result
+  identifier = "${random_string.alpha_prefix.result}${random_string.naming.result}"
+  prefix     = "${random_string.alpha_prefix.result}${random_string.naming.result}"
   tags = {
     Environment     = "Demo"
     Owner          = lookup(data.external.me.result, "name")
     SecurityControl = "Ignore"
     ManagedBy      = "Terraform"
   }
-}
-
-# Random naming
-resource "random_string" "naming" {
-  special = false
-  upper   = false
-  length  = 6
 }
 
 # Resource Group

@@ -23,7 +23,10 @@ variable "project_name" {
 variable "service_plan_sku" {
   description = "SKU for the service plan"
   type        = string
-  default     = "EP1"
+  validation {
+    condition     = contains(["EP1", "EP2", "EP3"], var.service_plan_sku)
+    error_message = "The service_plan_sku must be one of: EP1, EP2, EP3."
+  }
 }
 
 variable "storage_account_name" {

@@ -13,6 +13,11 @@ variable "resource_group_id" {
 variable "location" {
   description = "Azure region for resources"
   type        = string
+  
+  validation {
+    condition     = contains(["canadaeast", "eastus", "eastus2", "southcentralus", "westus", "westus3"], var.location)
+    error_message = "The location must be one of: canadaeast, eastus, eastus2, southcentralus, westus, westus3."
+  }
 }
 
 variable "environment" {
@@ -20,8 +25,8 @@ variable "environment" {
   type        = string
 }
 
-variable "project_identifier" {
-  description = "Project identifier for resource naming. Should be short and alphanumeric."
+variable "subdomain_name" {
+  description = "To be used for the Foundry instance subdomain. Should be short and alphanumeric."
   type        = string
 }
 
@@ -43,28 +48,7 @@ variable "model_deployments" {
       version = string
     })
   }))
-  default = [
-    {
-      name     = "gpt-41-mini"
-      sku_name = "GlobalStandard"
-      capacity = 1
-      model = {
-        format  = "OpenAI"
-        name    = "gpt-4.1-mini"
-        version = "2025-04-14"
-      }
-    },
-    {
-      name     = "gpt-41"
-      sku_name = "GlobalStandard"
-      capacity = 1
-      model = {
-        format  = "OpenAI"
-        name    = "gpt-4.1"
-        version = "2025-04-14"
-      }
-    }
-  ]
+  default = null
 }
 
 variable "projects" {
@@ -76,16 +60,10 @@ variable "projects" {
   }))
 }
 
-variable "vnet_integration_subnet_id" {
-  description = "Subnet ID for Foundry VNet integration (optional)"
-  type        = string
-  default     = ""
-}
-
 variable "disable_local_auth" {
   description = "Disable local authentication (API key)"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "public_network_access" {
@@ -94,20 +72,23 @@ variable "public_network_access" {
   default     = "Disabled"
 }
 
-variable "enable_private_endpoints" {
-  description = "Enable private endpoints for Foundry"
-  type        = bool
-  default     = false
+variable "foundry_subnet_id" {
+  description = "Subnet ID for the private endpoint (optional)"
+  type        = string
+  default     = null
 }
 
-variable "private_endpoint_info" {
-  description = "Private endpoint configuration (subnet_id and dns_zone_ids)"
-  type = object({
-    subnet_id = string
-    dns_zone_ids = map(string)
-  })
-  default = null
-  nullable = true
+
+variable "agents_subnet_id" {
+  description = "Subnet ID for VNet integration (optional)"
+  type        = string
+  default     = null
+}
+
+variable "dns_zone_ids" {
+  description = "List of private DNS zone IDs for the private endpoint"
+  type        = list(string)
+  default     = []
 }
 
 variable "network_restrictions" {

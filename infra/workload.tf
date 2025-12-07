@@ -33,7 +33,6 @@ module "networking" {
     }
     services = {
       address_prefix = cidrsubnet(var.cidr, 8, 1)
-      nsg_name       = "compute"
     }
     functionapps = {
       address_prefix = cidrsubnet(var.cidr, 8, 2)
@@ -52,7 +51,6 @@ module "networking" {
     }
     containerapps = {
       address_prefix = cidrsubnet(var.cidr, 7, 4)
-      nsg_name       = "compute"
       delegation = {
         name = "container-app-delegation"
         service_delegation = {
@@ -62,7 +60,12 @@ module "networking" {
     }
     foundry = {
       address_prefix = cidrsubnet(var.cidr, 8, 6)
-      nsg_name       = "compute"
+      delegation = {
+        name = "service-delegation-aifoundry"
+        service_delegation = {
+          name = "Microsoft.App/environments"
+        }
+     }
     }
   }
 
@@ -293,6 +296,7 @@ module "function_apps" {
   location              = azurerm_resource_group.shared_rg.location
   environment           = "demo"
   project_name          = local.prefix
+  service_plan_sku      = "EP1" 
   
   # Dependencies
   storage_account_name                      = module.funcapp_storage.storage_account_name
@@ -356,22 +360,21 @@ module "foundry" {
   source                = "./modules/foundry"
   resource_group_name   = azurerm_resource_group.shared_rg.name
   resource_group_id     = azurerm_resource_group.shared_rg.id
-  location              = azurerm_resource_group.shared_rg.location
-  project_identifier    = local.prefix
+  location              = var.region_aifoundry
+  subdomain_name        = local.prefix
   environment           = "demo"
   tags                  = local.tags
 
-  # networking
-  vnet_integration_subnet_id  = module.networking.subnet_ids["foundry"]
-  enable_private_endpoints = true
-  private_endpoint_info = {
-    subnet_id = module.networking.subnet_ids["services"]
-    dns_zone_ids = {
-      cognitiveServices = module.networking.private_dns_zone_ids["cognitive_services"]
-      azureOpenAI       = module.networking.private_dns_zone_ids["openai"]
-      servicesAiAzure   = module.networking.private_dns_zone_ids["ai_services"]
-    }
-  }
+  # networking - VNET injection for agents
+  agents_subnet_id    = module.networking.subnet_ids["foundry"]
+
+  # networking - private endpoint
+  foundry_subnet_id   = module.networking.subnet_ids["services"]
+  dns_zone_ids = [
+    module.networking.private_dns_zone_ids["cognitive_services"],
+    module.networking.private_dns_zone_ids["openai"],
+    module.networking.private_dns_zone_ids["ai_services"]
+  ]
 
   projects = [
     {
@@ -383,6 +386,30 @@ module "foundry" {
       name         = "project-2"
       display_name = "Foundry Project 2"
       description  = "This is the second Foundry project."
+    }
+  ]
+
+
+  model_deployments = [
+    {
+      name     = "demo-gpt-41-mini"
+      sku_name = "GlobalStandard"
+      capacity = 1
+      model = {
+        format  = "OpenAI"
+        name    = "gpt-4.1-mini"
+        version = "2025-04-14"
+      }
+    },
+    {
+      name     = "demo-gpt-41"
+      sku_name = "GlobalStandard"
+      capacity = 1
+      model = {
+        format  = "OpenAI"
+        name    = "gpt-4.1"
+        version = "2025-04-14"
+      }
     }
   ]
 

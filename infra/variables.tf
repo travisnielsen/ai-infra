@@ -5,13 +5,13 @@ variable "subscription_id" {
 
 variable "region" {
   type    = string
-  default = "centralus"
+  default = "westus3"
   description = "Azure region to deploy resources."
 }
 
 variable "region_aifoundry" {
   type    = string
-  default = "eastus2"
+  default = "westus3"
   description = "Azure region to deploy AI Foundry resources."
 }
 

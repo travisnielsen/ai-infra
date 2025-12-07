@@ -9,10 +9,10 @@ output "foundry_service" {
   }
 }
 
-output "foundry_deployments" {
+output "model_deployments" {
   description = "Foundry model deployments"
   value = {
-    for name, deployment in azapi_resource.foundry_deployments : name => {
+    for name, deployment in azurerm_cognitive_deployment.model_deployments : name => {
       id   = deployment.id
       name = deployment.name
     }
