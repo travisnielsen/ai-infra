@@ -137,3 +137,16 @@ resource "azurerm_private_endpoint" "function_app_pe" {
     App    = each.key
   })
 }
+
+resource "azurerm_app_service_source_control" "function_app_source_control" {
+  for_each = {
+    for idx, app in var.function_apps : tostring(idx) => app
+    if app.source_control != null
+  }
+
+  app_id            = azurerm_linux_function_app.apps[each.key].id
+  repo_url         = each.value.source_control.repo_url
+  branch           = each.value.source_control.branch
+  use_manual_integration = each.value.source_control.is_manual_integration
+  rollback_enabled = each.value.source_control.deployment_rollout_enabled
+}

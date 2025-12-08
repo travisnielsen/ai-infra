@@ -86,6 +86,12 @@ variable "function_apps" {
     app_settings           = map(string)
     connection_strings     = map(string)
     enable_vnet_integration = bool
+    source_control = object({
+      repo_url                  = string
+      branch                    = string
+      use_manual_integration    = bool
+      rollback_enabled          = bool
+    })
   }))
   default = []
 }
@@ -113,3 +119,4 @@ variable "private_dns_zone_id" {
   type        = string
   default     = ""
 }
+

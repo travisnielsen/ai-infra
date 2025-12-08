@@ -238,6 +238,7 @@ module "container_apps" {
   environment           = "dev"
   project_name          = local.prefix
   depends_on            = [ terraform_data.acr_repository_provision_hello_world_api ]
+  tags = local.tags
   
   # Dependencies
   subnet_id                           = module.networking.subnet_ids["containerapps"]
@@ -281,8 +282,6 @@ module "container_apps" {
     }
   ]
   dapr_enabled   = false
-  
-  tags = local.tags
 }
 
 
@@ -296,7 +295,8 @@ module "function_apps" {
   location              = azurerm_resource_group.shared_rg.location
   environment           = "demo"
   project_name          = local.prefix
-  service_plan_sku      = "EP1" 
+  service_plan_sku      = "EP1"
+  tags = local.tags
   
   # Dependencies
   storage_account_name                      = module.funcapp_storage.storage_account_name
@@ -321,10 +321,14 @@ module "function_apps" {
       app_settings           = {}
       connection_strings     = {}
       enable_vnet_integration = true
+      source_control = {
+        repo_url               = var.function_app_source_control_url
+        branch                 = "main"
+        use_manual_integration = false
+        rollback_enabled       = false
+      }
     }
   ]
-  
-  tags = local.tags
 }
 
 

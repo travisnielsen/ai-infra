@@ -43,3 +43,10 @@ variable "github_repository" {
   description = "GitHub repository to register the self-hosted runner with (e.g., user/repo)"
   type        = string
 }
+
+variable "function_app_source_control_url" {
+  description = "URL path to function app source code. Specify subdirectory if needed. Leave empty to disable source control setup."
+  type        = string
+  sensitive   = false
+  default     = ""
+}
