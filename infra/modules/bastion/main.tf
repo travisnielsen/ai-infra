@@ -42,14 +42,13 @@ resource "azurerm_bastion_host" "bastion" {
   name                = "${var.prefix}-bastion"
   resource_group_name = var.resource_group_name
   location            = var.location
+  tags                = var.tags
   sku                 = var.sku
   scale_units         = var.sku == "Standard" ? var.scale_units : null
   
   # Developer SKU requires VNet ID instead of ip_configuration
   virtual_network_id = var.sku == "Developer" ? data.azurerm_virtual_network.vnet.id : null
   
-  tags = var.tags
-
   # Copy/paste is available for Basic and Standard SKUs (not Developer)
   copy_paste_enabled = var.sku != "Developer" ? var.copy_paste_enabled : false
 

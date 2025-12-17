@@ -5,7 +5,7 @@
 ##################################################
 
 module "networking" {
-  source              = "./modules/networking"
+  source              = "../modules/networking"
   prefix              = local.identifier
   resource_group_name = azurerm_resource_group.shared_rg.name
   location            = azurerm_resource_group.shared_rg.location
@@ -79,7 +79,7 @@ module "networking" {
 ##################################################
 
 module "observability" {
-  source = "./modules/observability"
+  source = "../modules/observability"
   prefix              = local.identifier
   resource_group_name = azurerm_resource_group.shared_rg.name
   location            = azurerm_resource_group.shared_rg.location
@@ -92,7 +92,7 @@ module "observability" {
 ##################################################
 
 module "security" {
-  source                 = "./modules/security"
+  source                 = "../modules/security"
   prefix                 = local.identifier
   resource_group_name    = azurerm_resource_group.shared_rg.name
   location               = azurerm_resource_group.shared_rg.location
@@ -116,7 +116,7 @@ module "security" {
 ##################################################
 
 module "container_registry" {
-    source                        = "./modules/container-registry"
+    source                        = "../modules/container-registry"
     resource_group_name           = azurerm_resource_group.shared_rg.name
     location                      = azurerm_resource_group.shared_rg.location
     sku                           = "Premium"
@@ -138,7 +138,7 @@ module "container_registry" {
 
 /*
 module "github_runner" {
-  source                        = "./modules/github-runner"
+  source                        = "../modules/github-runner"
   prefix                        = local.prefix
   resource_group_name           = azurerm_resource_group.shared_rg.name
   location                      = azurerm_resource_group.shared_rg.location
@@ -160,7 +160,7 @@ module "github_runner" {
 ##################################################
 
 module "app_storage" {
-  source                = "./modules/storage"
+  source                = "../modules/storage"
   resource_group_name   = azurerm_resource_group.shared_rg.name
   location              = azurerm_resource_group.shared_rg.location
   environment           = "demo"
@@ -203,7 +203,7 @@ module "app_storage" {
 ##################################################
 
 module "funcapp_storage" {
-  source                = "./modules/storage"
+  source                = "../modules/storage"
   resource_group_name   = azurerm_resource_group.shared_rg.name
   location              = azurerm_resource_group.shared_rg.location
   environment           = "demo"
@@ -232,7 +232,7 @@ module "funcapp_storage" {
 ##################################################
 
 module "container_apps" {
-  source                = "./modules/container-apps"
+  source                = "../modules/container-apps"
   resource_group_name   = azurerm_resource_group.shared_rg.name
   location              = azurerm_resource_group.shared_rg.location
   environment           = "dev"
@@ -290,7 +290,7 @@ module "container_apps" {
 ##################################################
 
 module "function_apps" {
-  source                = "./modules/function-apps"
+  source                = "../modules/function-apps"
   resource_group_name   = azurerm_resource_group.shared_rg.name
   location              = azurerm_resource_group.shared_rg.location
   environment           = "demo"
@@ -331,7 +331,7 @@ module "function_apps" {
 ##################################################
 
 module "ai_services" {
-  source                = "./modules/ai-services"
+  source                = "../modules/ai-services"
   resource_group_name   = azurerm_resource_group.shared_rg.name
   location              = azurerm_resource_group.shared_rg.location
   environment           = "demo"
@@ -355,7 +355,7 @@ module "ai_services" {
 ##################################################
 
 module "foundry" {
-  source                = "./modules/foundry"
+  source                = "../modules/foundry"
   resource_group_name   = azurerm_resource_group.shared_rg.name
   resource_group_id     = azurerm_resource_group.shared_rg.id
   location              = var.region_aifoundry
@@ -422,9 +422,10 @@ module "foundry" {
 ##################################################
 
 module "utility_vm" {
-  source                = "./modules/virtual-machines"
+  source                = "../modules/virtual-machines"
   resource_group_name   = azurerm_resource_group.shared_rg.name
   location              = azurerm_resource_group.shared_rg.location
+  tags                  = local.tags
   prefix                = local.identifier
   computer_name         = "${local.identifier}-util"
   
@@ -437,11 +438,8 @@ module "utility_vm" {
   admin_password        = var.utility_vm_admin_password
 
   # Pass the script content to be executed via Custom Script Extension
-  # work in progress - commented out for now
-  # setup_script          = templatefile("${path.module}/scripts/util_vm_setup.ps1", {})
-  # setup_script_name     = "util_vm_setup.ps1"
-  
-  tags = local.tags
+  setup_script          = templatefile("${path.module}/../scripts/util_vm_setup_choco.ps1", {})
+  setup_script_name     = "util_vm_setup_choco.ps1"
 }
 
 
@@ -450,7 +448,7 @@ module "utility_vm" {
 ##################################################
 
 module "bastion" {
-  source                  = "./modules/bastion"
+  source                  = "../modules/bastion"
   prefix                  = local.identifier
   resource_group_name     = azurerm_resource_group.shared_rg.name
   location                = azurerm_resource_group.shared_rg.location

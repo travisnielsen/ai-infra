@@ -54,8 +54,7 @@ resource "azurerm_virtual_machine_extension" "setup_script" {
   tags                 = var.tags
 
   protected_settings = jsonencode({
-    commandToExecute = "powershell -ExecutionPolicy Unrestricted -File ${var.setup_script_name}"
-    script          = base64encode(var.setup_script)
+    commandToExecute = "powershell -ExecutionPolicy Unrestricted -Command \"$script = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${base64encode(var.setup_script)}')); Invoke-Expression $script\""
   })
 
   depends_on = [
